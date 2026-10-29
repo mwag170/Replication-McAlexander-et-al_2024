@@ -1,0 +1,960 @@
+---
+title: "A comment on ‘They’re Still There, He’s All Gone: American Fatalities in Foreign Wars and Right-Wing Radicalization at Home"
+
+date: "2026-09-25"
+
+author:
+  - "Moritz Wagner^[University of Canterbury, Department of Economics and Finance, UC Business School; moritz.wagner@canterbury.ac.nz; ORCID: 0000-0002-1354-400] ^[Corresponding Author]"
+  - "Jakob Teichmann^[University of Münster, Center for Information Technology; jakob.teichmann@uni-muenster.de]"
+  - "Matthias Frey-Konrad^[TU Dortmund University, Institute of Philosophy and Political Science; matthias.frey-konrad@tu-dortmund.de; ORCID: 0000-0002-5827-9046]"
+
+
+abstract: |
+  This report assesses the computational reproducibility and robustness of McAlexander et al.’s (2024) analysis of the association between local U.S. war fatalities and right-wing radicalization, measured by geolocated Parler video uploads. Using the authors’ publicly available analysis data and code, we reproduce the main results. We then conduct four robustness checks. Replacing the racial population-count controls with total population leaves the association positive and statistically significant at both levels of aggregation, with somewhat larger estimates, particularly at the census-tract level. A Poisson pseudo-maximum-likelihood specification using raw video counts and the authors’ original logged war-fatality measure produces a positive but smaller estimate that is significant at the 10% level. Removing counties with the highest population, fatality, or video-upload values has little effect on the county coefficient, and leave-one-state-out estimations yield similarly stable estimates across states. Overall, the published findings are computationally reproducible, with the county-level relationship proving robust to influential observations and state composition, while some sensitivity remains with respect to specification choices. 
+
+
+format:
+  pdf:
+    papersize: a4
+    link-citations: true
+  html: default
+  
+number-sections: true
+
+references:
+  - id: McAlexanderEtAl2023
+    type: dataset
+    title: "Replication Data for: They’re Still There, He’s All Gone: American Fatalities in Foreign Wars and Right-Wing Radicalization at Home"
+    author:
+      - family: McAlexander
+        given: Richard J.
+      - family: Rubin
+        given: Michael A. 
+      - family: Williams
+        given: Rob
+    issued:
+      date-parts:
+        - [2023]
+    publisher: Harvard Dataverse
+    version: 1.0
+    DOI: 10.7910/DVN/4GLPII
+  
+  - id: McalexanderEtAl2024
+    type: article-journal
+    title: "They’re Still There, He’s All Gone: American Fatalities in Foreign Wars and Right-Wing Radicalization at Home"
+    author:
+      - family: McAlexander
+        given: Richard J.
+      - family: Rubin
+        given: Michael A.
+      - family: Williams
+        given: Rob
+    issued:
+      date-parts:
+        - [2024]
+    container-title: American Political Science Review
+    volume: 118
+    issue: 3
+    page: 1577-1583
+    DOI: 10.1017/S0003055423000904
+
+  - id: UsheyWickham2026
+    type: software
+    title: "renv: Project Environments"
+    author:
+      - family: Ushey
+        given: Kevin
+      - family: Wickham
+        given: Hadley
+    issued:
+      date-parts:
+        - [2026]
+    version: 1.2.4
+    URL: https://rstudio.github.io/renv/
+---
+
+<!-- setup and packages by McAlexander et al  -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      #dev = 'cairo_pdf',
+                      fig.align = 'center')
+
+library(tidyverse)
+library(tigris)
+library(haven)
+library(sf)
+library(modelsummary)
+library(lfe)
+library(glmnet)
+library(RWmisc)
+
+
+inline_hook <- function (x) {
+  if (is.numeric(x)) {
+    res <- ifelse(x == round(x),
+      sprintf('%d', x),
+      sprintf('%.2f', x)
+    )
+    paste(res, collapse = ', ')
+  } else {
+    return(x)
+  }
+}
+knitr::knit_hooks$set(inline = inline_hook)
+
+```
+
+```{r load-original-models, include=FALSE}
+#| cache: true
+#| cache.extra: !expr unname(tools::md5sum(here::here("make_models.R")))
+
+source(here::here("make_models.R"))
+```
+
+<!-- Our extra setup  -->
+
+```{r setup2, include=FALSE}
+
+library(fixest)
+library(flextable)
+library(tinytable)
+
+```
+
+\clearpage
+
+## Introduction
+
+@McalexanderEtAl2024 study whether the local costs of the U.S. wars in Iraq and Afghanistan are associated with right-wing radicalization at home. Using geolocated Parler video uploads as a measure of radical-right activity, they relate wartime fatalities to online activity at both the county and census-tract levels while controlling for political, economic, demographic, and military-service characteristics. Their headline claim is that “communities that bear the greatest costs of foreign wars are prone to higher rates of right-wing radicalization.” The authors report a positive and statistically significant relationship between war fatalities and Parler activity at both geographic levels, while explicitly noting that their analysis does not establish a causal effect. In the present report, prepared for the Institute for Replication as part of the Münster Replication Games, we investigate whether the published results are computationally reproducible and assess their robustness to alternative specifications and replication.
+
+We obtained the replication package from the journal’s online supplementary materials. Our R reproduction code is available in the accompanying [GitHub repository](https://github.com/mwag170/Replication-McAlexander-et-al_2024.git). The Quarto file (.qmd) should be run on the same level as the reproduction scripts by the authors.
+
+## Computational Reproducibility
+
+We were able to reproduce the results of the original study using the publicly available replication package, which contains the required analysis code and analysis data. However, raw data and the corresponding cleaning code were not fully provided in the replication package. The documentation and data supporting the study are openly available through the APSR Dataverse [@McAlexanderEtAl2023]. Reproduction required only a minor adjustment to the original software environment: the R package RWmisc, which was removed from CRAN on 11 June 2026[^1], had to be installed directly from its GitHub repository. After this adjustment, the supplied code and data reproduced the original results. We suggest using `renv` [@UsheyWickham2026] or similar packages to ensure a stable project-specific package environment. @tbl-repro summarizes the content and conditions of the computational reproducibility.
+
+[^1]: see <https://perma.cc/63RL-TMEN>
+
+|                                 | Fully | Partial | No  |
+|:--------------------------------|:-----:|:-------:|:---:|
+| Raw data provided               |       |    x    |     |
+| Cleaning code provided          |       |    x    |     |
+| Analysis data provided          |   x   |         |     |
+| Analysis code provided          |   x   |         |     |
+| Reproducible from raw data      |       |         |  x  |
+| Reproducible from analysis data |   x   |         |     |
+
+: Computational Reproduction results {#tbl-repro}
+
+@tbl-readmeDoc records the documentation provided in the README file of the replication package. The README explains how the analysis code can be run using two .rmd files—one for the main paper and the other for the appendix. Furthermore, the datasets contained in the “data” folder, including their sources, are briefly described. A detailed data dictionary describing the individual variables is not provided. The used software and package versions are listed in the appendix; the expected running time is not reported.
+
+|   | Provided and clear | Provided but unclear | Not provided |
+|:-------------------|:----------------:|:----------------:|:----------------:|
+| README document | x |  |  |
+| Data dictionary |  |  | x |
+| Code execution instructions | x |  |  |
+| Computational requirements: |  |  |  |
+| \- libraries / packages | x |  |  |
+| \- running time |  |  | x |
+
+: Documentation replication package {#tbl-readmeDoc}
+
+## Discrepancies between Preregistration and Article
+
+The original study was not preregistered.
+
+## Robustness Reproduction and Replication
+
+To assess the robustness of the main findings, we conduct four additional analyses using the original data. First, we use another treatment of population as a control variable and replace the racial population counts with logged total population counts. Second, we estimate a Poisson pseudo-maximum-likelihood (PPML) model to examine the sensitivity to the log transformation of the outcome. Third, we exclude the top one percent of counties by population, war fatalities, and video uploads, respectively, to assess whether the results are driven by extreme observations. Fourth, we repeatedly re-estimate the county-level model while omitting one state at a time to determine whether the association is driven by any single state.
+
+### Replacing the racial population counts with total population counts at the county and tract level
+
+Replacing the racial population count controls with total population leaves the positive association between war fatalities and Parler video uploads intact at both levels of aggregation. @tbl-check1 summarizes the main estimates. At the county level, the coefficient increases slightly from 0.130 to 0.148 and remains highly statistically significant. At the census-tract level, the coefficient increases from 0.037 to 0.065 and also remains statistically significant. These results indicate that the estimated association is robust to replacing the race-specific population controls with logged total population at both the county and tract levels.
+
+```{r}
+#| label: Check_1
+
+# ============================================================
+# POPULATION-CONTROL ROBUSTNESS
+#
+# Compare:
+# 1. Original county specification
+# 2. County: replace racial population counts with log population
+# 3. Original tract specification
+# 4. Tract: replace racial population counts with log population
+# ============================================================
+
+# ------------------------------------------------------------
+# Prepare harmonized variables
+# ------------------------------------------------------------
+
+county_robust_df <- county_level_df %>%
+  mutate(
+    war_fatalities = war_casualties,
+    log_total_population = log1p(population)
+  )
+
+tract_robust_df <- tract_df %>%
+  mutate(
+    war_fatalities = war_casualties_log,
+    #log_total_population = pop_log
+    log_total_population = log1p(totalpop)
+  )
+
+
+# ============================================================
+# COUNTY LEVEL
+# ============================================================
+
+# Original specification
+county_original_robust <- felm(
+  num_videos_25km_log ~
+    war_fatalities +
+    ms_post_2001 +
+    ms_pre_2001 +
+    enlistment +
+    enlistment_pre2003 +
+    base +
+    white +
+    black +
+    amerind +
+    asian +
+    someotherrace +
+    num_refugees +
+    nonwhite_pop_change_scale +
+    median_income_2019 +
+    trade_shock +
+    share_people_over_high_school +
+    pctpopwbbacc +
+    share_of_repubs +
+    age_18_to_65_pct +
+    pop_density_log |
+    as.factor(state.abb) | 0 | state.abb,
+  data = county_robust_df
+)
+
+
+# Replace racial population counts with total log population
+county_totalpop <- felm(
+  num_videos_25km_log ~
+    war_fatalities +
+    ms_post_2001 +
+    ms_pre_2001 +
+    enlistment +
+    enlistment_pre2003 +
+    base +
+    log_total_population +
+    num_refugees +
+    nonwhite_pop_change_scale +
+    median_income_2019 +
+    trade_shock +
+    share_people_over_high_school +
+    pctpopwbbacc +
+    share_of_repubs +
+    age_18_to_65_pct +
+    pop_density_log |
+    as.factor(state.abb) | 0 | state.abb,
+  data = county_robust_df
+)
+
+
+# ============================================================
+# CENSUS TRACT LEVEL
+# ============================================================
+
+# Original specification
+tract_original_robust <- felm(
+  num_videos_25km_log ~
+    war_fatalities +
+    ms_post_2001 +
+    ms_pre_2001 +
+    base +
+    nonwhite_pop_change_scale +
+    white +
+    black +
+    amerind +
+    asian +
+    someotherrace +
+    income_share_under_50 +
+    income_share_above_100 +
+    share_people_over_high_school |
+    county_state | 0 | county_state,
+  data = tract_robust_df
+)
+
+
+# Replace racial population counts with total log population
+tract_totalpop <- felm(
+  num_videos_25km_log ~
+    war_fatalities +
+    ms_post_2001 +
+    ms_pre_2001 +
+    base +
+    nonwhite_pop_change_scale +
+    log_total_population +
+    income_share_under_50 +
+    income_share_above_100 +
+    share_people_over_high_school |
+    county_state | 0 | county_state,
+  data = tract_robust_df
+)
+
+
+
+# ============================================================
+# FORMATTED COMPARISON TABLE
+# ============================================================
+
+pop_table <- modelsummary(
+  list(
+    "County: Original" = county_original_robust,
+    "County: Total population" = county_totalpop,
+    "Tract: Original" = tract_original_robust,
+    "Tract: Total population" = tract_totalpop
+  ),
+
+  coef_map = c(
+    "war_fatalities" = "War fatalities (log)",
+    "log_total_population" = "Log population"
+  ),
+
+  fmt = 3,
+  stars = TRUE,
+  gof_omit = "AIC|BIC",
+  output = "flextable"
+)
+
+pop_table <- pop_table %>%
+  theme_booktabs() %>%
+  # autofit() %>%
+  width(width = 1.1)%>%
+  align(j = 1, align = "left", part = "all") %>%
+  align(j = 2:5, align = "center", part = "all")
+  # bold(part = "header") %>%
+  # fontsize(size = 10, part = "all") %>%
+  # set_caption(
+    # caption = "Population-control robustness"
+  # )
+
+```
+
+```{r}
+#| label: tbl-check1
+#| tbl-cap: "Population-control robustness"
+
+pop_table
+
+```
+
+### Count-level PPML using raw counts
+
+Re-estimating the county-level relationship using PPML with raw Parler video counts, while retaining the authors’ original logged war-fatality measure, controls, state fixed effects, and state-clustered standard errors, yields a positive coefficient on war fatalities of 0.066 (SE = 0.034), significant at the 10% level. The model uses the full sample of 2,950 counties. Relative to the authors’ original linear specification, where the corresponding coefficient is 0.130 (SE = 0.029), the estimated association is smaller and less precisely estimated under PPML. Overall, the positive relationship is preserved, although the magnitude and statistical precision are somewhat sensitive to the choice of functional form. The main estimates of the PPML can be found in @tbl-PPML while the main estimates by the authors can be found in @tbl-check1.
+
+```{r}
+#| label: check-2
+
+
+# ============================================================
+# TEST 2:
+# COUNTY PPML USING RAW VIDEO COUNTS
+#
+# Chen–Roth-motivated robustness test.
+#
+# Same explanatory variables, fixed effects, and clustering
+# as the authors' original county-level specification.
+#
+# Changes relative to the original model:
+# - raw video counts instead of log(1 + videos)
+# - PPML instead of linear regression
+#
+# War fatalities remain in their original transformed form:
+# war_casualties = log(1 + fatalities)
+# ============================================================
+
+# ------------------------------------------------------------
+# Prepare raw outcome
+# ------------------------------------------------------------
+
+county_ppml_df <- county_level_df %>%
+  mutate(
+    videos_raw = round(expm1(num_videos_25km_log))
+  )
+
+
+# ------------------------------------------------------------
+# PPML specification
+# ------------------------------------------------------------
+
+county_ppml <- fepois(
+  videos_raw ~
+    war_casualties +
+    ms_post_2001 +
+    ms_pre_2001 +
+    enlistment +
+    enlistment_pre2003 +
+    base +
+    white +
+    black +
+    amerind +
+    asian +
+    someotherrace +
+    num_refugees +
+    nonwhite_pop_change_scale +
+    median_income_2019 +
+    trade_shock +
+    share_people_over_high_school +
+    pctpopwbbacc +
+    share_of_repubs +
+    age_18_to_65_pct +
+    pop_density_log |
+    state.abb,
+
+  data = county_ppml_df,
+  vcov = ~ state.abb
+)
+
+
+# ------------------------------------------------------------
+# Formatted results table
+# ------------------------------------------------------------
+
+ppml_table <- modelsummary(
+  list(
+    "County PPML" = county_ppml
+  ),
+
+  coef_map = c(
+    "war_casualties" = "War fatalities (log)"
+  ),
+
+  fmt = 3,
+  stars = TRUE,
+  gof_omit = "AIC|Log.Lik.|Deviance",
+
+  output = "flextable"
+)
+
+
+ppml_table <- ppml_table %>%
+  theme_booktabs() %>%
+  # autofit() %>%
+  width(width = 1.1)%>%
+  align(j = 1, align = "left", part = "all") %>%
+  align(j = 2, align = "center", part = "all") 
+  # bold(part = "header") %>%
+  # fontsize(size = 9, part = "all") %>%
+  # set_caption(
+  #   caption = "County-level PPML using raw Parler video counts"
+  # )
+
+
+```
+
+```{r}
+#| label: tbl-PPML
+#| tbl-cap: "County-level PPML using raw Parler video counts"
+#| tbl-position: "!htbp"
+
+ppml_table
+
+```
+
+### Exclude top 1% of counties
+
+The county-level results are robust to the exclusion of potentially influential observations. The estimated coefficient on war fatalities changes only modestly from 0.130 in the original specification to 0.121 when excluding counties with the largest populations, 0.128 when excluding counties with the most war fatalities, and 0.122 when excluding counties with the most Parler video uploads (see @tbl-outlier_table). In all three specifications, the coefficient remains positive and statistically significant at the 0.1% level, suggesting that the estimated association is not driven by a small number of unusually large or extreme counties. Even when excluding the top 10% of the counties, the results remain significant.
+
+```{r}
+#| label: check-3
+
+# ============================================================
+# TEST 3A:
+# DROP TOP 1% OF COUNTIES
+#
+# Exclude separately the top 1% by:
+# - total population
+# - war fatalities
+# - Parler video uploads
+#
+# Rankings are defined within the original estimation sample.
+# ============================================================
+
+
+# ------------------------------------------------------------
+# Construct original estimation sample
+# ------------------------------------------------------------
+
+county_model_vars <- c(
+  "num_videos_25km_log",
+  "war_casualties",
+  "ms_post_2001",
+  "ms_pre_2001",
+  "enlistment",
+  "enlistment_pre2003",
+  "base",
+  "white",
+  "black",
+  "amerind",
+  "asian",
+  "someotherrace",
+  "num_refugees",
+  "nonwhite_pop_change_scale",
+  "median_income_2019",
+  "trade_shock",
+  "share_people_over_high_school",
+  "pctpopwbbacc",
+  "share_of_repubs",
+  "age_18_to_65_pct",
+  "pop_density_log",
+  "state.abb"
+)
+
+county_estimation_sample <- county_level_df[
+  complete.cases(county_level_df[, county_model_vars]),
+]
+
+
+# ------------------------------------------------------------
+# Original county model
+# ------------------------------------------------------------
+
+estimate_county_model <- function(data) {
+
+  felm(
+    num_videos_25km_log ~
+      war_casualties +
+      ms_post_2001 +
+      ms_pre_2001 +
+      enlistment +
+      enlistment_pre2003 +
+      base +
+      white +
+      black +
+      amerind +
+      asian +
+      someotherrace +
+      num_refugees +
+      nonwhite_pop_change_scale +
+      median_income_2019 +
+      trade_shock +
+      share_people_over_high_school +
+      pctpopwbbacc +
+      share_of_repubs +
+      age_18_to_65_pct +
+      pop_density_log |
+      as.factor(state.abb) | 0 | state.abb,
+    data = data
+  )
+}
+
+
+# ------------------------------------------------------------
+# Prepare variables for identifying top 1%
+# ------------------------------------------------------------
+
+county_outlier_df <- county_estimation_sample %>%
+  mutate(
+    .row_id = row_number(),
+    .fatalities_raw = expm1(war_casualties),
+    .videos_raw = expm1(num_videos_25km_log)
+  )
+
+n_drop <- ceiling(0.01 * nrow(county_outlier_df))
+
+
+# Top 1% within estimation sample
+drop_population <- county_outlier_df %>%
+  slice_max(order_by = population, n = n_drop, with_ties = FALSE) %>%
+  pull(.row_id)
+
+drop_fatalities <- county_outlier_df %>%
+  slice_max(order_by = .fatalities_raw, n = n_drop, with_ties = FALSE) %>%
+  pull(.row_id)
+
+drop_videos <- county_outlier_df %>%
+  slice_max(order_by = .videos_raw, n = n_drop, with_ties = FALSE) %>%
+  pull(.row_id)
+
+
+# ------------------------------------------------------------
+# Estimate models
+# ------------------------------------------------------------
+
+county_original_outlier <- estimate_county_model(
+  county_outlier_df
+)
+
+county_drop_population <- estimate_county_model(
+  county_outlier_df %>%
+    filter(!.row_id %in% drop_population)
+)
+
+county_drop_fatalities <- estimate_county_model(
+  county_outlier_df %>%
+    filter(!.row_id %in% drop_fatalities)
+)
+
+county_drop_videos <- estimate_county_model(
+  county_outlier_df %>%
+    filter(!.row_id %in% drop_videos)
+)
+
+
+
+# ------------------------------------------------------------
+# Formatted comparison table
+# ------------------------------------------------------------
+
+outlier_table <- modelsummary(
+  list(
+    "Original" = county_original_outlier,
+    "Top 1%: population" = county_drop_population,
+    "Top 1%: fatalities" = county_drop_fatalities,
+    "Top 1%: videos" = county_drop_videos
+  ),
+
+  coef_map = c(
+    "war_casualties" = "War fatalities (log)"
+  ),
+
+  fmt = 3,
+  stars = TRUE,
+  gof_omit = "AIC|BIC",
+  output = "flextable"
+)
+
+
+outlier_table <- outlier_table %>%
+  theme_booktabs() %>%
+  # autofit() %>%
+  width(width = 1.1)%>%
+  align(j = 1, align = "left", part = "all") %>%
+  align(j = 2:5, align = "center", part = "all") 
+  # bold(part = "header") %>%
+  # fontsize(size = 9, part = "all") %>%
+  # set_caption(
+  #   caption = "Robustness to excluding the top 1% of counties"
+  # )
+
+
+```
+
+```{r}
+#| label: tbl-outlier_table 
+#| tbl-cap: "Robustness to excluding the top 1% of counties"
+
+
+outlier_table
+
+
+# ------------------------------------------------------------
+# Sample-size check
+# ------------------------------------------------------------
+
+cat(
+  "\nOriginal estimation sample:", nrow(county_outlier_df),
+  "\nCounties excluded in each test:", n_drop,
+  "\n"
+)
+```
+
+### Leave-one-state-out
+
+The county-level association is also stable in leave-one-state-out re-estimations. Across the specifications, the estimated coefficient on war fatalities ranges from 0.111 to 0.142, compared with 0.130 in the full sample, and remains positive and statistically significant in every case (see @tbl-loso-summary for a summary of the estimates). The smallest estimate is obtained when Texas is excluded and the largest when Illinois is excluded. Overall, the results indicate that the estimated county-level association is not driven by observations from any single state. @fig-Rainfallplot plots the coefficients for war fatalities with a 95% CI when excluding a state. The red line indicates the estimate for the full sample. The estimates in detail can be found in @tbl-loso-results-table in the Appendix.
+
+```{r}
+#| label: check-4
+
+# TEST 4
+# LEAVE-ONE-STATE-OUT ROBUSTNESS
+#
+# Uses the exact estimation sample and specification
+# of the authors' original county-level model.
+
+# ------------------------------------------------------------
+# Construct original estimation sample
+# ------------------------------------------------------------
+
+# county_model_vars <- c(
+#   "num_videos_25km_log",
+#   "war_casualties",
+#   "ms_post_2001",
+#   "ms_pre_2001",
+#   "enlistment",
+#   "enlistment_pre2003",
+#   "base",
+#   "white",
+#   "black",
+#   "amerind",
+#   "asian",
+#   "someotherrace",
+#   "num_refugees",
+#   "nonwhite_pop_change_scale",
+#   "median_income_2019",
+#   "trade_shock",
+#   "share_people_over_high_school",
+#   "pctpopwbbacc",
+#   "share_of_repubs",
+#   "age_18_to_65_pct",
+#   "pop_density_log",
+#   "state.abb"
+# )
+
+# county_estimation_sample <- county_level_df[
+#   complete.cases(county_level_df[, county_model_vars]),
+# ]
+
+
+# ------------------------------------------------------------
+# Original county model
+# ------------------------------------------------------------
+
+# estimate_county_model <- function(data) {
+# 
+#   felm(
+#     num_videos_25km_log ~
+#       war_casualties +
+#       ms_post_2001 +
+#       ms_pre_2001 +
+#       enlistment +
+#       enlistment_pre2003 +
+#       base +
+#       white +
+#       black +
+#       amerind +
+#       asian +
+#       someotherrace +
+#       num_refugees +
+#       nonwhite_pop_change_scale +
+#       median_income_2019 +
+#       trade_shock +
+#       share_people_over_high_school +
+#       pctpopwbbacc +
+#       share_of_repubs +
+#       age_18_to_65_pct +
+#       pop_density_log |
+#       as.factor(state.abb) | 0 | state.abb,
+#     data = data
+#   )
+# }
+
+
+# ------------------------------------------------------------
+# Leave one state out at a time
+# ------------------------------------------------------------
+
+# use the following from check 3: 
+# - county_model_vars
+# - county_estimation_sample
+# - estimate_county_model
+
+
+states <- sort(unique(county_estimation_sample$state.abb))
+
+leave_one_state_out <- map_dfr(
+  states,
+  function(s) {
+
+    m <- estimate_county_model(
+      county_estimation_sample %>%
+        filter(state.abb != s)
+    )
+
+    ct <- summary(m)$coefficients
+
+    tibble(
+      state_omitted = s,
+      estimate = ct["war_casualties", "Estimate"],
+      std_error = ct["war_casualties", "Cluster s.e."],
+      p_value = ct["war_casualties", "Pr(>|t|)"],
+      n = nobs(m)
+    )
+  }
+)
+
+# ------------------------------------------------------------
+# Formatted LOSO results
+# ------------------------------------------------------------
+
+# Summary statistics
+leave_one_state_summary <- leave_one_state_out %>%
+  summarise(
+    min_coefficient = min(estimate),
+    max_coefficient = max(estimate),
+    mean_coefficient = mean(estimate),
+    median_coefficient = median(estimate),
+    max_p_value = max(p_value),
+    significant_5pct = sum(p_value < 0.05),
+    number_models = n()
+  )
+
+
+loso_summary_table <- flextable(leave_one_state_summary) %>%
+  set_header_labels(
+    min_coefficient = "Minimum",
+    max_coefficient = "Maximum",
+    mean_coefficient = "Mean",
+    median_coefficient = "Median",
+    max_p_value = "Maximum p-value",
+    significant_5pct = "Significant at 5%",
+    number_models = "Models"
+  ) %>%
+  colformat_double(
+    j = c(
+      "min_coefficient",
+      "max_coefficient",
+      "mean_coefficient",
+      "median_coefficient"
+    ),
+    digits = 3
+  ) %>%
+  colformat_double(
+    j = "max_p_value",
+    digits = 4
+  ) %>%
+  theme_booktabs() 
+  # autofit() %>%
+  # width(width = 1.1)
+  # align(align = "center", part = "all") %>%
+  # bold(part = "header") %>%
+  # fontsize(size = 9, part = "all") %>%
+  # set_caption(
+  #   caption = "Summary of leave-one-state-out estimates"
+  # )
+
+
+```
+
+```{r}
+#| label: tbl-loso-summary
+#| tbl-cap: "Summary of leave-one-state-out estimates"
+
+loso_summary_table
+
+```
+
+```{r}
+
+# ------------------------------------------------------------
+# Detailed state-by-state results
+# ------------------------------------------------------------
+
+loso_results_table <- leave_one_state_out %>%
+  arrange(estimate) %>%
+  flextable() %>%
+  set_header_labels(
+    state_omitted = "State omitted",
+    estimate = "Coefficient",
+    std_error = "Std. error",
+    p_value = "p-value",
+    n = "Observations"
+  ) %>%
+  colformat_double(
+    j = c("estimate", "std_error"),
+    digits = 3
+  ) %>%
+  colformat_double(
+    j = "p_value",
+    digits = 4
+  ) %>%
+  colformat_int(
+    j = "n",
+    big.mark = ","
+  ) %>%
+  theme_booktabs() %>%
+  autofit() %>%
+  align(j = 1, align = "left", part = "all") %>%
+  align(j = 2:5, align = "center", part = "all") %>%
+  bold(part = "header") %>%
+  fontsize(size = 9, part = "all") %>%
+  set_caption(
+    caption = "Leave-one-state-out robustness estimates"
+  )
+
+# loso_results_table
+
+# Forest plot of leave-one-state-out estimates
+full_model <- estimate_county_model(county_estimation_sample)
+full_estimate <- coef(full_model)["war_casualties"]
+
+loso_plot_data <- leave_one_state_out %>%
+  mutate(
+    lower = estimate - 1.96 * std_error,
+    upper = estimate + 1.96 * std_error
+  ) %>%
+  arrange(estimate) %>%
+  mutate(state_omitted = factor(state_omitted, levels = state_omitted))
+
+```
+
+@fig-Rainfallplot plots the coefficients for war fatalities with a 95% CI when excluding a state. The red line indicates the estimate for the full sample. The estimates in detail can be found in @tbl-loso-results-table in the Appendix.
+
+```{r}
+#| label: fig-Rainfallplot
+#| echo: false
+#| fig-cap: Leave-one-state-out robustness estimates
+#| fig-height: 7
+#| fig-width: 6
+
+
+ggplot(loso_plot_data, aes(x = estimate, y = state_omitted)) +
+  geom_vline(xintercept = full_estimate, colour = "firebrick", linewidth = 1) +
+  geom_errorbar(
+    aes(xmin = lower, xmax = upper),
+    orientation = "y",
+    width = 0
+  ) +
+  geom_point(size = 1.5) +
+  theme_bw() +
+  labs(
+    x = "Coefficient for war fatalities (95% CI)",
+    y = "State omitted",
+    caption = paste0(
+      "Red line: full-sample estimate (",
+      round(full_estimate, 3),
+      ")"
+    )
+  )
+```
+
+## Conclusion
+
+We successfully reproduced the main results of @McalexanderEtAl2024 using the authors’ publicly available analysis data and code, subject only to a minor software-environment adjustment. The additional robustness tests generally support the stability of the reported association between local war fatalities and Parler activity. At the county level, the original estimate is highly stable to replacing racial population-count controls with total population, excluding the most extreme counties, and sequentially omitting individual states. In particular, excluding the top 1% of counties by population, fatalities, or video uploads produces only modest changes in the estimated coefficient, while the leave-one-state-out estimates range from 0.111 to 0.142 and remain statistically significant throughout.
+
+The population-control robustness check also supports the tract-level result. Replacing the racial population-count controls with logged total tract population increases the estimated coefficient on war fatalities from 0.037 to 0.065, with the coefficient remaining statistically significant. The main indication of specification sensitivity arises from the alternative count-data model. At the county level, estimating a PPML model using raw Parler video counts while retaining the authors’ original logged war-fatality measure yields a positive coefficient of 0.066, which is statistically significant at the 10% level but smaller and less precisely estimated than in the original specification.
+
+Taken together, the results confirm the computational reproducibility of the published findings and show that the positive association between local war fatalities and Parler activity is robust across several alternative specifications and sample restrictions. The county-level relationship is not driven by particular states or a small number of extreme observations, and the tract-level result remains robust to replacing racial population controls with total population. At the same time, the smaller and less precisely estimated coefficient under PPML indicates that the magnitude and statistical precision of the relationship are somewhat sensitive to the functional form used for the outcome.
+
+\clearpage
+
+**Funding disclosure**
+
+None of the authors received financial or in-kind support for this replication, and no interested party provided funding, consultancy support, data access, or other assistance relevant to the report.
+
+**Conflict of Interest disclosure**
+
+None of the authors has a conflict of interest to disclose in relation to the original paper or its authors.
+
+**Artificial Intelligence disclosure**
+
+Generative AI tools, including ChatGPT and Claude, were used to assist with drafting and editing text and with developing and debugging analysis code. All AI-generated output was reviewed by the authors, who take full responsibility for the content of the report.
+
+\clearpage
+
+**References**
+
+::: {#refs}
+:::
+
+\clearpage
+
+**Appendix**
+
+```{r}
+#| label: tbl-loso-results-table
+#| echo: false
+#| tbl-cap: "Detailed Leave-one-state-out robustness estimates"
+
+loso_results_table
+
+```
